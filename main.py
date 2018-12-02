@@ -14,7 +14,7 @@ import math
 
 
 def gaussian(x):
-    return K.exp(-K.pow((x*100),2))
+    return K.exp(-K.pow((x*999999999),2))
 
 
 get_custom_objects().update({'gaussian': Activation(gaussian)})
@@ -23,66 +23,70 @@ get_custom_objects().update({'gaussian': Activation(gaussian)})
 # create samples
 def create_data(nof_samples, nof_dict_entries, min_val=0, max_val=1):
 
-    data_X = np.random.rand(nof_samples * (nof_dict_entries*2+1))*(max_val-min_val)+min_val
-    data_y = np.random.rand(nof_samples) * (max_val-min_val)+min_val
+    data_X = np.random.rand(nof_samples * (nof_dict_entries // 2 * 5))*(max_val-min_val)+min_val
+    data_y = np.random.rand(nof_samples) * (nof_dict_entries // 2)*(max_val-min_val)+min_val
+
     for i in range(0, nof_samples):
-        index = random.randint(0,nof_dict_entries) # 1/3rd chance of no key in dict, we need it to output 0 here
+        index = random.randint(0,nof_dict_entries) # 1/nof_dict_entries chance of no key in dict, output 0
         if index < nof_dict_entries:
-            data_X[i*(nof_dict_entries*2+1) + nof_dict_entries*2] = data_X[i*(nof_dict_entries*2+1) + index*2]
-            data_y[i] = data_X[i*(nof_dict_entries*2+1) + index*2 + 1]
+            for j in range(0, nof_dict_entries // 2):
+                data_X[i*(5*nof_dict_entries//2) + j*5+4] = data_X[i*(5*nof_dict_entries//2) + (index // 2)*5+ 2*(index % 2)]
+            data_y[i] = data_X[i*(5*nof_dict_entries//2) + (index // 2)*5+ 2*(index % 2)+1]
         else:
-            data_X[i * (nof_dict_entries * 2 + 1) + nof_dict_entries * 2] = random.uniform(min_val, max_val)
+            key = random.uniform(min_val, max_val)
+            for j in range(0, nof_dict_entries // 2):
+                data_X[i*(5*nof_dict_entries//2) + j * 5 + 4] = key
             data_y[i] = 0.0
 
-    return np.reshape(data_X,[nof_samples,nof_dict_entries*2+1]), np.reshape(data_y,[nof_samples,1])
+    return np.reshape(data_X,[nof_samples,(nof_dict_entries//2)*5]), np.reshape(data_y,[nof_samples,1])
 
 
-nof_samples = 1000
-nof_dict_entries = 2
+nof_samples = 50
+nof_dict_entries = 20 # let this be a multiple of 2 for now
 min_val = 0
 max_val = 20
 
 train_X, train_y = create_data(nof_samples, nof_dict_entries, min_val, max_val)
 
-input = Input(shape=(nof_dict_entries*2+1,))
-#x = Dropout(0.2)(input)
-branch_linear_l = Dense(2, activation="linear")(input)  # to forward values
-branch_gaussian_l = Dense(2, activation="gaussian")(input)  # output high value for match, 0 otherwise
-concatenate_l = concatenate([branch_linear_l, branch_gaussian_l])
-relu_l = Dense(2, activation='relu')(concatenate_l)  # subtract high value to cut off non-matching
-output_l = Dense(1, activation='linear')(relu_l)  # sum up the two elements, identity
+input = Input(shape=(nof_dict_entries//2*5,))
+
+print(input)
+outputs = []
+# Create a larger dictionary out of the small ones
+for i in range(nof_dict_entries//2):
+    first_layer = []
+    out = Lambda(lambda x: x[:, i*5:i*5+5])(input)  # get 5 values of input
+
+    first_layer.append(Dense(2, activation="linear",
+                             weights=[np.array([[0, 0], [1, 0], [0, 0], [0, 1], [0, 0]]), np.array([0, 0])],
+                             trainable=False)(out)) # to forward values
+    first_layer.append(Dense(2, activation="gaussian",
+                             weights=[np.array([[10,0],[0,0],[0,10],[0,0],[-10,-10]]), np.array([0,0])],
+                             trainable=False)(out))  # output high value for match, 0 otherwise
+    concatenate_l = concatenate(first_layer)
+    outputs.append(Dense(2, activation='relu',
+                         weights= [np.array([[1,0],[0,1],[20,0], [0,20]]), np.array([-20,-20])],
+                         trainable=True)(concatenate_l))  # subtract high value to cut off non-matching
+
+if nof_dict_entries > 2:
+    concatenate_outputs_l = concatenate(outputs)
+    output_l = Dense(1, activation='linear', weights=[np.ones([nof_dict_entries,1]), np.zeros(1)],
+                     trainable=False)(concatenate_outputs_l)  # sum up the two elements, identity
+else:
+    output_l = Dense(1, activation='linear', weights=[np.array([[1],[1]]), np.array([0])], trainable=False)(outputs[0])
 
 model = Model(inputs=[input], outputs=[output_l])
-
-weights = model.layers[2].get_weights()
-
-branch_linear_w = [np.array([[0,0],[1,0],[0,0],[0,1],[0,0]]), np.array([0,0])]
-branch_gaussian_w = [np.array([[2,0],[0,0],[0,2],[0,0],[-2,-2]]), np.array([0,0])]
-#relu_w = [np.array([[1,0],[0,1],[(max_val-min_val),0],
-#                           [0,(max_val-min_val)]]), np.array([-(max_val-min_val),-(max_val-min_val)])]
-#relu_w = [np.array([[1,0],[0,1],[1,0], [0,1]]), np.array([-1,-1])] # leaving this for training works
-relu_w = [np.array([[1,0],[0,1],[4.5,-7.0], [-5.5,3]]), np.array([-4.5,-3])] # alternative
-
-output_w = [np.array([[1],[1]]), np.array([0])]
-
-model.layers[1].set_weights(branch_linear_w)
-model.layers[2].set_weights(branch_gaussian_w)
-model.layers[4].set_weights(relu_w)
-model.layers[5].set_weights(output_w)
-
-model.layers[1].trainable = False # this is just a passthrough layer
-model.layers[2].trainable = False # nothing to be gained, same for all dictionaries
-model.layers[4].trainable = True # allows the key and value to be from outside [0,1]
-model.layers[5].trainable = False # sums up the values, same for all dictionaries
-
-model.compile(optimizer=Adam(lr=0.005, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False), loss='mae')
+model.compile(optimizer=Adam(lr=0.004, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False), loss='mae')
 model.summary()
 model.fit(train_X, train_y, epochs=40000, batch_size=1000)
 
+print(model.layers[0].get_weights())
 print(model.layers[1].get_weights())
 print(model.layers[2].get_weights())
+print(model.layers[3].get_weights())
 print(model.layers[4].get_weights())
-print(model.layers[5].get_weights())
+print(model.layers[9].get_weights())
+print(model.layers[10].get_weights())
 
 test_X, test_y = create_data(200, nof_dict_entries, min_val, max_val)
 results = model.predict(test_X, batch_size=200)
