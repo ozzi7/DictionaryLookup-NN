@@ -1,4 +1,5 @@
 # dictionary lookup test input [x1,y1], [x2,y2],..[q1] -> output y where q == x
+# leaving the RELU layer trainable allows x and y to be outside [0,1], but values must be > 0
 
 import numpy as np
 import keras.backend as K
@@ -34,8 +35,8 @@ def create_data(nof_samples, nof_dict_entries, min_val=0, max_val=1):
 
 nof_samples = 1000  # using too many samples makes the NN learn all samples
 nof_dict_entries = 2
-min_val = 0
-max_val = 10
+min_val = -8
+max_val = 20
 
 train_X, train_y = create_data(nof_samples, nof_dict_entries, min_val, max_val)
 
@@ -52,11 +53,12 @@ model = Model(inputs=[input], outputs=[output_l])
 weights = model.layers[2].get_weights()
 
 branch_linear_w = [np.array([[0,0],[1,0],[0,0],[0,1],[0,0]]), np.array([0,0])]
-branch_gaussian_w = [np.array([[100000,0],[0,0],[0,100000],[0,0],[-100000,-100000]]), np.array([0,0])]
 branch_gaussian_w = [np.array([[2,0],[0,0],[0,2],[0,0],[-2,-2]]), np.array([0,0])]
 #relu_w = [np.array([[1,0],[0,1],[(max_val-min_val),0],
 #                           [0,(max_val-min_val)]]), np.array([-(max_val-min_val),-(max_val-min_val)])]
-relu_w = [np.array([[1,0],[0,1],[1,0], [0,1]]), np.array([-1,-1])] # leaving this for training works
+#relu_w = [np.array([[1,0],[0,1],[1,0], [0,1]]), np.array([-1,-1])] # leaving this for training works
+relu_w = [np.array([[1,0],[0,1],[4.5,-7.0], [-5.5,3]]), np.array([-4.5,-3])] # alternative
+
 output_w = [np.array([[1],[1]]), np.array([0])]
 
 model.layers[1].set_weights(branch_linear_w)
@@ -64,10 +66,10 @@ model.layers[2].set_weights(branch_gaussian_w)
 model.layers[4].set_weights(relu_w)
 model.layers[5].set_weights(output_w)
 
-model.layers[1].trainable = False
-model.layers[2].trainable = False
-model.layers[4].trainable = True
-model.layers[5].trainable = False
+model.layers[1].trainable = False # this is just a passthrough layer
+model.layers[2].trainable = False # nothing to be gained, same for all dictionaries
+model.layers[4].trainable = True # allows the key and value to be from outside [0,1]
+model.layers[5].trainable = False # sums up the values, same for all dictionaries
 
 model.compile(optimizer=Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False), loss='mae')
 model.summary()
