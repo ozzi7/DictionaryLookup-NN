@@ -26,16 +26,20 @@ def create_data(nof_samples, nof_dict_entries, min_val=0, max_val=1):
     data_X = np.random.rand(nof_samples * (nof_dict_entries*2+1))*(max_val-min_val)+min_val
     data_y = np.random.rand(nof_samples) * (max_val-min_val)+min_val
     for i in range(0, nof_samples):
-        index = random.randint(0,nof_dict_entries-1)
-        data_X[i*(nof_dict_entries*2+1) + nof_dict_entries*2] = data_X[i*(nof_dict_entries*2+1) + index*2]
-        data_y[i] = data_X[i*(nof_dict_entries*2+1) + index*2 + 1]
+        index = random.randint(0,nof_dict_entries) # 1/3rd chance of no key in dict, we need it to output 0 here
+        if index < nof_dict_entries:
+            data_X[i*(nof_dict_entries*2+1) + nof_dict_entries*2] = data_X[i*(nof_dict_entries*2+1) + index*2]
+            data_y[i] = data_X[i*(nof_dict_entries*2+1) + index*2 + 1]
+        else:
+            data_X[i * (nof_dict_entries * 2 + 1) + nof_dict_entries * 2] = random.uniform(min_val, max_val)
+            data_y[i] = 0.0
 
     return np.reshape(data_X,[nof_samples,nof_dict_entries*2+1]), np.reshape(data_y,[nof_samples,1])
 
 
-nof_samples = 1000  # using too many samples makes the NN learn all samples
+nof_samples = 1000
 nof_dict_entries = 2
-min_val = -8
+min_val = 0
 max_val = 20
 
 train_X, train_y = create_data(nof_samples, nof_dict_entries, min_val, max_val)
@@ -71,9 +75,9 @@ model.layers[2].trainable = False # nothing to be gained, same for all dictionar
 model.layers[4].trainable = True # allows the key and value to be from outside [0,1]
 model.layers[5].trainable = False # sums up the values, same for all dictionaries
 
-model.compile(optimizer=Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False), loss='mae')
+model.compile(optimizer=Adam(lr=0.005, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False), loss='mae')
 model.summary()
-model.fit(train_X, train_y, epochs=50000, batch_size=1000)
+model.fit(train_X, train_y, epochs=40000, batch_size=1000)
 
 print(model.layers[1].get_weights())
 print(model.layers[2].get_weights())
