@@ -77,7 +77,7 @@ else:
 model = Model(inputs=[input], outputs=[output_l])
 model.compile(optimizer=Adam(lr=0.004, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False), loss='mae')
 model.summary()
-model.fit(train_X, train_y, epochs=5000, batch_size=1000000)
+model.fit(train_X, train_y, epochs=50, batch_size=1000000)
 
 test_X, test_y = create_data(3, nof_dict_entries, min_val, max_val)
 results = model.predict(test_X, batch_size=1)
