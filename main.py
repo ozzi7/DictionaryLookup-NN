@@ -11,7 +11,7 @@ from keras.utils.generic_utils import get_custom_objects
 import random
 
 
-# basically inf between -1 and 1, outside 0, and 1 at -1 and 1
+# inf at 0 and 0 otherwise
 def gaussian(x):
     return K.exp(-K.pow((x*100000),2))
 
